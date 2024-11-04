@@ -6,11 +6,11 @@
 
 Features:
 
-- waves of randomly colored enemies, each more numerous
-- HUD with weapon stats, HP bar and wave counts
-- some enemies are bigger and have more health
+- waves of randomly shaded enemies enemies, each more numerous
+- enemies vary in size and toughness
 - some are on decreasing orbit around the player
 - some enemies are shooting at the player
+- HUD with weapon stats, HP bar and wave counts
 - player can choose one of two power-us after each wave
 - power-ups: restore health, increase rate of fire, bullet speed
 - bullet count per shot, bullet spread, explosion radius, damage
