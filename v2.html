@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bullet Heaven Game</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+      background: #222;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    class Player {
+      constructor() {
+        this.x = canvas.width / 2;
+        this.y = canvas.height / 2;
+        this.radius = 20;
+        this.speed = 5;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'cyan';
+        ctx.fill();
+        ctx.closePath();
+      }
+
+      move(direction) {
+        switch (direction) {
+          case 'up':
+            if (this.y - this.radius > 0) this.y -= this.speed;
+            break;
+          case 'down':
+            if (this.y + this.radius < canvas.height) this.y += this.speed;
+            break;
+          case 'left':
+            if (this.x - this.radius > 0) this.x -= this.speed;
+            break;
+          case 'right':
+            if (this.x + this.radius < canvas.width) this.x += this.speed;
+            break;
+        }
+      }
+    }
+
+    class Bullet {
+      constructor(x, y, dx, dy) {
+        this.x = x;
+        this.y = y;
+        this.radius = 5;
+        this.dx = dx;
+        this.dy = dy;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'yellow';
+        ctx.fill();
+        ctx.closePath();
+      }
+
+      update() {
+        this.x += this.dx;
+        this.y += this.dy;
+      }
+    }
+
+    class Enemy {
+      constructor(x, y, speed) {
+        this.x = x;
+        this.y = y;
+        this.radius = 20;
+        this.speed = speed;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'red';
+        ctx.fill();
+        ctx.closePath();
+      }
+
+      update(playerX, playerY) {
+        const angle = Math.atan2(playerY - this.y, playerX - this.x);
+        this.x += Math.cos(angle) * this.speed;
+        this.y += Math.sin(angle) * this.speed;
+      }
+    }
+
+    const player = new Player();
+    const bullets = [];
+    const enemies = [];
+    const keys = {};
+    let waveNumber = 1;
+
+    function spawnEnemies(wave) {
+      for (let i = 0; i < wave * 3; i++) {
+        const x = Math.random() < 0.5 ? 0 : canvas.width;
+        const y = Math.random() * canvas.height;
+        const speed = 1 + Math.random() * 1.5;
+        enemies.push(new Enemy(x, y, speed));
+      }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+    });
+
+    window.addEventListener('click', (e) => {
+      const angle = Math.atan2(e.clientY - player.y, e.clientX - player.x);
+      const speed = 8;
+      const dx = Math.cos(angle) * speed;
+      const dy = Math.sin(angle) * speed;
+      bullets.push(new Bullet(player.x, player.y, dx, dy));
+    });
+
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Player Movement
+      if (keys['ArrowUp'] || keys['w']) player.move('up');
+      if (keys['ArrowDown'] || keys['s']) player.move('down');
+      if (keys['ArrowLeft'] || keys['a']) player.move('left');
+      if (keys['ArrowRight'] || keys['d']) player.move('right');
+
+      // Draw player
+      player.draw();
+
+      // Update and draw bullets
+      bullets.forEach((bullet, index) => {
+        bullet.update();
+        bullet.draw();
+
+        // Remove bullets that go off-screen
+        if (
+          bullet.x < 0 ||
+          bullet.x > canvas.width ||
+          bullet.y < 0 ||
+          bullet.y > canvas.height
+        ) {
+          bullets.splice(index, 1);
+        }
+      });
+
+      // Update and draw enemies
+      enemies.forEach((enemy, index) => {
+        enemy.update(player.x, player.y);
+        enemy.draw();
+
+        // Check for collision with player
+        const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+        if (dist - enemy.radius - player.radius < 1) {
+          // End game or reduce player health (not implemented)
+          console.log('Player hit!');
+        }
+
+        // Check for collision with bullets
+        bullets.forEach((bullet, bulletIndex) => {
+          const bulletDist = Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y);
+          if (bulletDist - bullet.radius - enemy.radius < 1) {
+            // Remove enemy and bullet
+            enemies.splice(index, 1);
+            bullets.splice(bulletIndex, 1);
+          }
+        });
+      });
+
+      // Spawn new wave if all enemies are defeated
+      if (enemies.length === 0) {
+        spawnEnemies(waveNumber);
+        waveNumber++;
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    spawnEnemies(waveNumber);
+    gameLoop();
+  </script>
+</body>
+</html>

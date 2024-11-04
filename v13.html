@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bullet Heaven Game</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+      background: #222;
+    }
+    #hpBar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 300px;
+      height: 20px;
+      background: #444;
+      border: 2px solid #fff;
+    }
+    #hp {
+      height: 100%;
+      background: #0f0;
+      width: 100%;
+    }
+    #waveInfo {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      font-size: 24px;
+    }
+    #weaponUpgradeMessage {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      font-size: 20px;
+      color: #0f0;
+      opacity: 0;
+      transition: opacity 1s ease-in-out;
+    }
+    #weaponStats {
+      position: fixed;
+      top: 50px;
+      right: 10px;
+      font-size: 18px;
+      color: #fff;
+    }
+    #upgradeOptions {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 30px;
+      border: 2px solid #fff;
+      display: none;
+      z-index: 10;
+    }
+    .upgrade-choice {
+      display: inline-block;
+      width: 200px;
+      height: 100px;
+      margin: 10px;
+      background: #333;
+      color: #fff;
+      font-size: 18px;
+      text-align: center;
+      vertical-align: middle;
+      line-height: 100px;
+      cursor: pointer;
+      border: 2px solid #fff;
+      transition: background 0.3s;
+    }
+    .upgrade-choice:hover {
+      background: #555;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="hpBar">
+    <div id="hp"></div>
+  </div>
+  <div id="waveInfo">Wave: 1 (Enemies left: 0)</div>
+  <div id="weaponUpgradeMessage">Weapon upgraded!</div>
+  <div id="weaponStats">
+    <div>Fire Rate: <span id="fireRate">300</span> ms</div>
+    <div>Bullet Speed: <span id="bulletSpeed">8</span></div>
+    <div>Bullets per Shot: <span id="bulletCount">1</span></div>
+    <div>Spread Angle: <span id="bulletSpread">0</span></div>
+    <div>Explosion Radius: <span id="explosionRadius">None</span></div>
+    <div>Bullet Damage: <span id="bulletDamage">10</span></div>
+  </div>
+  <div id="upgradeOptions">
+    <div id="upgradeChoice1" class="upgrade-choice"></div>
+    <div id="upgradeChoice2" class="upgrade-choice"></div>
+  </div>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const hpBar = document.getElementById('hp');
+    const waveInfoDisplay = document.getElementById('waveInfo');
+    const weaponUpgradeMessage = document.getElementById('weaponUpgradeMessage');
+    const fireRateDisplay = document.getElementById('fireRate');
+    const bulletSpeedDisplay = document.getElementById('bulletSpeed');
+    const bulletCountDisplay = document.getElementById('bulletCount');
+    const bulletSpreadDisplay = document.getElementById('bulletSpread');
+    const explosionRadiusDisplay = document.getElementById('explosionRadius');
+    const bulletDamageDisplay = document.getElementById('bulletDamage');
+
+    const upgradeOptionsDiv = document.getElementById('upgradeOptions');
+    const upgradeChoice1Div = document.getElementById('upgradeChoice1');
+    const upgradeChoice2Div = document.getElementById('upgradeChoice2');
+
+    let gamePaused = false;
+
+    class Player {
+      constructor() {
+        this.x = canvas.width / 2;
+        this.y = canvas.height / 2;
+        this.radius = 20;
+        this.speed = 5;
+        this.hp = 100;
+        this.weapon = {
+          fireRate: 300,
+          bulletSpeed: 8,
+          bulletSpread: 0,
+          bulletCount: 1,
+          explosion: false,
+          explosionRadius: 0,
+          damage: 10,
+        };
+      }
+
+      draw() {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'cyan';
+        ctx.fill();
+        ctx.closePath();
+        ctx.restore();
+      }
+
+      move(direction) {
+        switch (direction) {
+          case 'up':
+            if (this.y - this.radius > 0) this.y -= this.speed;
+            break;
+          case 'down':
+            if (this.y + this.radius < canvas.height) this.y += this.speed;
+            break;
+          case 'left':
+            if (this.x - this.radius > 0) this.x -= this.speed;
+            break;
+          case 'right':
+            if (this.x + this.radius < canvas.width) this.x += this.speed;
+            break;
+        }
+      }
+
+      takeDamage(amount) {
+        this.hp -= amount;
+        if (this.hp < 0) this.hp = 0;
+        hpBar.style.width = `${this.hp}%`;
+
+        if (this.hp === 0) {
+          alert('Game Over');
+          window.location.reload();
+        }
+      }
+
+      restoreHealth(amount) {
+        this.hp += amount;
+        if (this.hp > 100) this.hp = 100;
+        hpBar.style.width = `${this.hp}%`;
+      }
+    }
+
+    class Bullet {
+      constructor(x, y, dx, dy, explosion = false, damage = 10, explosionRadius = 0) {
+        this.x = x;
+        this.y = y;
+        this.radius = 5;
+        this.dx = dx;
+        this.dy = dy;
+        this.explosion = explosion;
+        this.damage = damage;
+        this.explosionRadius = explosionRadius;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'yellow';
+        ctx.fill();
+        ctx.closePath();
+      }
+
+      update() {
+        this.x += this.dx;
+        this.y += this.dy;
+      }
+
+      explode() {
+        // Draw explosion effect
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.explosionRadius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 165, 0, 0.5)';
+        ctx.fill();
+        ctx.closePath();
+
+        // Apply damage to enemies within the explosion radius
+        enemies.forEach((enemy) => {
+          const dist = Math.hypot(this.x - enemy.x, this.y - enemy.y);
+          if (dist - enemy.radius < this.explosionRadius) {
+            if (enemy.takeDamage(this.damage)) {
+              enemy.markedForDeletion = true;
+            }
+          }
+        });
+
+        // Remove enemies that are marked for deletion
+        enemies = enemies.filter((enemy) => !enemy.markedForDeletion);
+      }
+    }
+
+    class Enemy {
+      constructor(x, y, speed, radius, hp, canShoot = false, behavior = 'chase') {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.speed = speed;
+        this.hp = hp;
+        this.canShoot = canShoot;
+        this.lastShotTime = 0;
+        this.behavior = behavior;
+        this.color = `hsl(${Math.random() * 360}, 50%, 50%)`;
+        this.angle = 0; // For circling behavior
+
+        if (this.behavior === 'circle') {
+          // Calculate initial orbitRadius and angle
+          const dx = this.x - player.x;
+          const dy = this.y - player.y;
+          this.orbitRadius = Math.hypot(dx, dy);
+          this.angle = Math.atan2(dy, dx);
+        }
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Create radial gradient for 3D ball effect
+        const gradient = ctx.createRadialGradient(0, 0, this.radius * 0.1, 0, 0, this.radius);
+        gradient.addColorStop(0, '#fff');
+        gradient.addColorStop(1, this.color);
+
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        ctx.closePath();
+        ctx.restore();
+      }
+
+      update(playerX, playerY) {
+        if (this.behavior === 'chase') {
+          const angle = Math.atan2(playerY - this.y, playerX - this.x);
+          this.x += Math.cos(angle) * this.speed;
+          this.y += Math.sin(angle) * this.speed;
+        } else if (this.behavior === 'circle') {
+          // Decrease orbitRadius over time
+          this.orbitRadius -= this.speed * 0.5; // Adjust the decrement factor as needed
+          if (this.orbitRadius < this.radius + player.radius) {
+            this.orbitRadius = this.radius + player.radius;
+          }
+          // Update angle to keep circling
+          this.angle += 0.005; // Adjust the speed of circling
+          this.x = playerX + Math.cos(this.angle) * this.orbitRadius;
+          this.y = playerY + Math.sin(this.angle) * this.orbitRadius;
+        }
+      }
+
+      takeDamage(amount) {
+        this.hp -= amount;
+        if (this.hp <= 0) {
+          return true;
+        }
+        return false;
+      }
+
+      shoot(playerX, playerY) {
+        if (this.canShoot && Date.now() - this.lastShotTime > 2000) {
+          const angle = Math.atan2(playerY - this.y, playerX - this.x);
+          const speed = 6;
+          const dx = Math.cos(angle) * speed;
+          const dy = Math.sin(angle) * speed;
+          enemyBullets.push(new EnemyBullet(this.x, this.y, dx, dy));
+          this.lastShotTime = Date.now();
+        }
+      }
+    }
+
+    class EnemyBullet {
+      constructor(x, y, dx, dy) {
+        this.x = x;
+        this.y = y;
+        this.radius = 5;
+        this.dx = dx;
+        this.dy = dy;
+        this.damage = 10;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'purple';
+        ctx.fill();
+        ctx.closePath();
+      }
+
+      update() {
+        this.x += this.dx;
+        this.y += this.dy;
+      }
+    }
+
+    const player = new Player();
+    const bullets = [];
+    const enemyBullets = [];
+    let enemies = [];
+    const keys = {};
+    let waveNumber = 1;
+    let mouseHeld = false;
+    let lastShotTime = 0;
+
+    const possibleUpgrades = [
+      'bulletSpeed',
+      'fireRate',
+      'bulletCount',
+      'bulletSpread',
+      'explosion',
+      'damage',
+      'restoreHealth',
+    ];
+
+    function spawnEnemies(wave) {
+      for (let i = 0; i < wave * 3; i++) {
+        const x = Math.random() < 0.5 ? 0 : canvas.width;
+        const y = Math.random() * canvas.height;
+        const speed = 1 + Math.random() * 1.5;
+        const radius = Math.random() < 0.8 ? 20 : 30;
+        const hp = radius === 20 ? 20 : 50;
+        const canShoot = Math.random() < 0.2;
+        const behavior = Math.random() < 0.3 ? 'circle' : 'chase'; // 30% chance to circle
+        enemies.push(new Enemy(x, y, speed, radius, hp, canShoot, behavior));
+      }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+    });
+
+    window.addEventListener('mousedown', () => {
+      mouseHeld = true;
+    });
+
+    window.addEventListener('mouseup', () => {
+      mouseHeld = false;
+    });
+
+    function shootBullet() {
+      const angle = Math.atan2(mouseY - player.y, mouseX - player.x);
+      for (let i = 0; i < player.weapon.bulletCount; i++) {
+        const spread = (Math.random() - 0.5) * player.weapon.bulletSpread;
+        const finalAngle = angle + spread;
+        const speed = player.weapon.bulletSpeed;
+        const dx = Math.cos(finalAngle) * speed;
+        const dy = Math.sin(finalAngle) * speed;
+        bullets.push(new Bullet(
+          player.x,
+          player.y,
+          dx,
+          dy,
+          player.weapon.explosion,
+          player.weapon.damage,
+          player.weapon.explosionRadius
+        ));
+      }
+    }
+
+    let mouseX = 0;
+    let mouseY = 0;
+
+    window.addEventListener('mousemove', (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    });
+
+    function announceWeaponUpgrade(message) {
+      weaponUpgradeMessage.innerText = message;
+      weaponUpgradeMessage.style.opacity = 1;
+      setTimeout(() => {
+        weaponUpgradeMessage.style.opacity = 0;
+      }, 2000);
+    }
+
+    function updateWeaponStatsDisplay() {
+      fireRateDisplay.innerText = player.weapon.fireRate;
+      bulletSpeedDisplay.innerText = player.weapon.bulletSpeed;
+      bulletCountDisplay.innerText = player.weapon.bulletCount;
+      bulletSpreadDisplay.innerText = player.weapon.bulletSpread.toFixed(2);
+      explosionRadiusDisplay.innerText = player.weapon.explosion ? player.weapon.explosionRadius : 'None';
+      bulletDamageDisplay.innerText = player.weapon.damage;
+    }
+
+    function showUpgradeOptions() {
+      gamePaused = true;
+
+      // Randomly select two different upgrades
+      let upgradeTypes = possibleUpgrades.slice();
+      const choice1Type = upgradeTypes.splice(Math.floor(Math.random() * upgradeTypes.length), 1)[0];
+      const choice2Type = upgradeTypes.splice(Math.floor(Math.random() * upgradeTypes.length), 1)[0];
+
+      // Display upgrade choices
+      upgradeChoice1Div.innerText = getUpgradeDescription(choice1Type);
+      upgradeChoice2Div.innerText = getUpgradeDescription(choice2Type);
+
+      // Add event listeners
+      upgradeChoice1Div.onclick = () => {
+        applyUpgrade(choice1Type);
+        hideUpgradeOptions();
+      };
+      upgradeChoice2Div.onclick = () => {
+        applyUpgrade(choice2Type);
+        hideUpgradeOptions();
+      };
+
+      // Show the upgrade options div
+      upgradeOptionsDiv.style.display = 'block';
+    }
+
+    function hideUpgradeOptions() {
+      upgradeOptionsDiv.style.display = 'none';
+      gamePaused = false;
+      waveNumber++;
+      spawnEnemies(waveNumber);
+    }
+
+    function getUpgradeDescription(type) {
+      switch (type) {
+        case 'bulletSpeed':
+          return 'Increase Bullet Speed';
+        case 'fireRate':
+          return 'Increase Fire Rate';
+        case 'bulletCount':
+          return 'Increase Bullet Count';
+        case 'bulletSpread':
+          return 'Increase Bullet Spread';
+        case 'explosion':
+          return 'Bullets Explode on Impact';
+        case 'damage':
+          return 'Increase Bullet Damage';
+        case 'restoreHealth':
+          return 'Restore Health';
+        default:
+          return 'Unknown Upgrade';
+      }
+    }
+
+    function applyUpgrade(type) {
+      let upgradeMessage = '';
+
+      switch (type) {
+        case 'bulletSpeed':
+          player.weapon.bulletSpeed += 2;
+          upgradeMessage = 'Increased bullet speed!';
+          break;
+        case 'fireRate':
+          player.weapon.fireRate = Math.max(player.weapon.fireRate - 50, 50);
+          upgradeMessage = 'Increased fire rate!';
+          break;
+        case 'bulletCount':
+          player.weapon.bulletCount++;
+          upgradeMessage = 'Increased bullet count!';
+          break;
+        case 'bulletSpread':
+          player.weapon.bulletSpread += 0.1;
+          upgradeMessage = 'Increased bullet spread!';
+          break;
+        case 'explosion':
+          if (!player.weapon.explosion) {
+            player.weapon.explosion = true;
+            player.weapon.explosionRadius = 20;
+            upgradeMessage = 'Bullets now explode on impact!';
+          } else {
+            player.weapon.explosionRadius += 10;
+            upgradeMessage = 'Increased explosion radius!';
+          }
+          break;
+        case 'damage':
+          player.weapon.damage += 5;
+          upgradeMessage = 'Increased bullet damage!';
+          break;
+        case 'restoreHealth':
+          player.restoreHealth(30); // Restore 30 health points
+          upgradeMessage = 'Restored health!';
+          break;
+      }
+      updateWeaponStatsDisplay();
+      announceWeaponUpgrade(upgradeMessage);
+    }
+
+    function gameLoop() {
+      if (gamePaused) {
+        requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Player Movement
+      if (keys['ArrowUp'] || keys['w']) player.move('up');
+      if (keys['ArrowDown'] || keys['s']) player.move('down');
+      if (keys['ArrowLeft'] || keys['a']) player.move('left');
+      if (keys['ArrowRight'] || keys['d']) player.move('right');
+
+      // Draw player
+      player.draw();
+
+      // Shoot bullets if mouse is held
+      const currentTime = Date.now();
+      if (mouseHeld && currentTime - lastShotTime > player.weapon.fireRate) {
+        shootBullet();
+        lastShotTime = currentTime;
+      }
+
+      // Update and draw bullets
+      bullets.forEach((bullet, bulletIndex) => {
+        bullet.update();
+        bullet.draw();
+
+        // Remove bullets that go off-screen
+        if (
+          bullet.x < 0 ||
+          bullet.x > canvas.width ||
+          bullet.y < 0 ||
+          bullet.y > canvas.height
+        ) {
+          bullets.splice(bulletIndex, 1);
+        }
+      });
+
+      // Update and draw enemy bullets
+      enemyBullets.forEach((bullet, bulletIndex) => {
+        bullet.update();
+        bullet.draw();
+
+        // Check collision with player
+        const dist = Math.hypot(player.x - bullet.x, player.y - bullet.y);
+        if (dist - bullet.radius - player.radius < 1) {
+          player.takeDamage(bullet.damage);
+          enemyBullets.splice(bulletIndex, 1);
+        }
+
+        // Remove bullets that go off-screen
+        if (
+          bullet.x < 0 ||
+          bullet.x > canvas.width ||
+          bullet.y < 0 ||
+          bullet.y > canvas.height
+        ) {
+          enemyBullets.splice(bulletIndex, 1);
+        }
+      });
+
+      // Update and draw enemies
+      enemies.forEach((enemy) => {
+        enemy.update(player.x, player.y);
+        enemy.draw();
+        enemy.shoot(player.x, player.y);
+      });
+
+      // Check for collisions between player and enemies
+      enemies.forEach((enemy, index) => {
+        const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+        if (dist - enemy.radius - player.radius < 1) {
+          player.takeDamage(10);
+          enemies.splice(index, 1);
+        }
+      });
+
+      // Check for collisions between bullets and enemies
+      bullets.forEach((bullet, bulletIndex) => {
+        enemies.forEach((enemy) => {
+          const bulletDist = Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y);
+          if (bulletDist - bullet.radius - enemy.radius < 1) {
+            bullets.splice(bulletIndex, 1);
+
+            if (bullet.explosion) {
+              bullet.explode();
+            } else {
+              if (enemy.takeDamage(bullet.damage)) {
+                enemy.markedForDeletion = true;
+              }
+            }
+          }
+        });
+      });
+
+      // Remove enemies marked for deletion
+      enemies = enemies.filter((enemy) => !enemy.markedForDeletion);
+
+      // Update wave info display
+      waveInfoDisplay.innerText = `Wave: ${waveNumber} (Enemies left: ${enemies.length})`;
+
+      // When all enemies are defeated, show upgrade options
+      if (enemies.length === 0 && !gamePaused) {
+        showUpgradeOptions();
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    spawnEnemies(waveNumber);
+    gameLoop();
+  </script>
+</body>
+</html>

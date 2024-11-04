@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bullet Heaven Game</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+      background: #222;
+    }
+    #hpBar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 300px;
+      height: 20px;
+      background: #444;
+      border: 2px solid #fff;
+    }
+    #hp {
+      height: 100%;
+      background: #0f0;
+      width: 100%;
+    }
+    #waveNumber {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      font-size: 24px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="hpBar">
+    <div id="hp"></div>
+  </div>
+  <div id="waveNumber">Wave: 1</div>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const hpBar = document.getElementById('hp');
+    const waveNumberDisplay = document.getElementById('waveNumber');
+
+    class Player {
+      constructor() {
+        this.x = canvas.width / 2;
+        this.y = canvas.height / 2;
+        this.radius = 20;
+        this.speed = 5;
+        this.hp = 100;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'cyan';
+        ctx.fill();
+        ctx.closePath();
+      }
+
+      move(direction) {
+        switch (direction) {
+          case 'up':
+            if (this.y - this.radius > 0) this.y -= this.speed;
+            break;
+          case 'down':
+            if (this.y + this.radius < canvas.height) this.y += this.speed;
+            break;
+          case 'left':
+            if (this.x - this.radius > 0) this.x -= this.speed;
+            break;
+          case 'right':
+            if (this.x + this.radius < canvas.width) this.x += this.speed;
+            break;
+        }
+      }
+
+      takeDamage(amount) {
+        this.hp -= amount;
+        if (this.hp < 0) this.hp = 0;
+        hpBar.style.width = `${this.hp}%`;
+
+        if (this.hp === 0) {
+          alert('Game Over');
+          window.location.reload();
+        }
+      }
+    }
+
+    class Bullet {
+      constructor(x, y, dx, dy) {
+        this.x = x;
+        this.y = y;
+        this.radius = 5;
+        this.dx = dx;
+        this.dy = dy;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'yellow';
+        ctx.fill();
+        ctx.closePath();
+      }
+
+      update() {
+        this.x += this.dx;
+        this.y += this.dy;
+      }
+    }
+
+    class Enemy {
+      constructor(x, y, speed, radius, hp) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.speed = speed;
+        this.hp = hp;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'red';
+        ctx.fill();
+        ctx.closePath();
+      }
+
+      update(playerX, playerY) {
+        const angle = Math.atan2(playerY - this.y, playerX - this.x);
+        this.x += Math.cos(angle) * this.speed;
+        this.y += Math.sin(angle) * this.speed;
+      }
+
+      takeDamage(amount) {
+        this.hp -= amount;
+        if (this.hp <= 0) {
+          return true;
+        }
+        return false;
+      }
+    }
+
+    class WeaponDrop {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.radius = 10;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'blue';
+        ctx.fill();
+        ctx.closePath();
+      }
+    }
+
+    const player = new Player();
+    const bullets = [];
+    const enemies = [];
+    const weaponDrops = [];
+    const keys = {};
+    let waveNumber = 1;
+    let mouseHeld = false;
+    let lastShotTime = 0;
+    const shootInterval = 300;
+
+    function spawnEnemies(wave) {
+      for (let i = 0; i < wave * 3; i++) {
+        const x = Math.random() < 0.5 ? 0 : canvas.width;
+        const y = Math.random() * canvas.height;
+        const speed = 1 + Math.random() * 1.5;
+        const radius = Math.random() < 0.8 ? 20 : 30;
+        const hp = radius === 20 ? 20 : 50;
+        enemies.push(new Enemy(x, y, speed, radius, hp));
+      }
+    }
+
+    function spawnWeaponDrop() {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+      weaponDrops.push(new WeaponDrop(x, y));
+    }
+
+    window.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+    });
+
+    window.addEventListener('mousedown', () => {
+      mouseHeld = true;
+    });
+
+    window.addEventListener('mouseup', () => {
+      mouseHeld = false;
+    });
+
+    function shootBullet() {
+      const angle = Math.atan2(mouseY - player.y, mouseX - player.x);
+      const speed = 8;
+      const dx = Math.cos(angle) * speed;
+      const dy = Math.sin(angle) * speed;
+      bullets.push(new Bullet(player.x, player.y, dx, dy));
+    }
+
+    let mouseX = 0;
+    let mouseY = 0;
+
+    window.addEventListener('mousemove', (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    });
+
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Player Movement
+      if (keys['ArrowUp'] || keys['w']) player.move('up');
+      if (keys['ArrowDown'] || keys['s']) player.move('down');
+      if (keys['ArrowLeft'] || keys['a']) player.move('left');
+      if (keys['ArrowRight'] || keys['d']) player.move('right');
+
+      // Draw player
+      player.draw();
+
+      // Shoot bullets if mouse is held
+      const currentTime = Date.now();
+      if (mouseHeld && currentTime - lastShotTime > shootInterval) {
+        shootBullet();
+        lastShotTime = currentTime;
+      }
+
+      // Update and draw bullets
+      bullets.forEach((bullet, index) => {
+        bullet.update();
+        bullet.draw();
+
+        // Remove bullets that go off-screen
+        if (
+          bullet.x < 0 ||
+          bullet.x > canvas.width ||
+          bullet.y < 0 ||
+          bullet.y > canvas.height
+        ) {
+          bullets.splice(index, 1);
+        }
+      });
+
+      // Update and draw enemies
+      enemies.forEach((enemy, index) => {
+        enemy.update(player.x, player.y);
+        enemy.draw();
+
+        // Check for collision with player
+        const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+        if (dist - enemy.radius - player.radius < 1) {
+          player.takeDamage(10);
+          enemies.splice(index, 1);
+        }
+
+        // Check for collision with bullets
+        bullets.forEach((bullet, bulletIndex) => {
+          const bulletDist = Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y);
+          if (bulletDist - bullet.radius - enemy.radius < 1) {
+            if (enemy.takeDamage(10)) {
+              enemies.splice(index, 1);
+            }
+            bullets.splice(bulletIndex, 1);
+          }
+        });
+      });
+
+      // Draw weapon drops
+      weaponDrops.forEach((weaponDrop, index) => {
+        weaponDrop.draw();
+
+        // Check for collision with player
+        const dist = Math.hypot(player.x - weaponDrop.x, player.y - weaponDrop.y);
+        if (dist - weaponDrop.radius - player.radius < 1) {
+          weaponDrops.splice(index, 1);
+          // Increase fire rate or other power-up logic here
+          console.log('Weapon collected!');
+        }
+      });
+
+      // Spawn new wave if all enemies are defeated
+      if (enemies.length === 0) {
+        spawnEnemies(waveNumber);
+        waveNumber++;
+        waveNumberDisplay.innerText = `Wave: ${waveNumber}`;
+        if (Math.random() < 0.5) {
+          spawnWeaponDrop();
+        }
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    spawnEnemies(waveNumber);
+    gameLoop();
+  </script>
+</body>
+</html>

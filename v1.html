@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bullet Heaven Game</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+      background: #222;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    class Player {
+      constructor() {
+        this.x = canvas.width / 2;
+        this.y = canvas.height / 2;
+        this.radius = 20;
+        this.speed = 5;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'cyan';
+        ctx.fill();
+        ctx.closePath();
+      }
+
+      move(direction) {
+        switch (direction) {
+          case 'up':
+            if (this.y - this.radius > 0) this.y -= this.speed;
+            break;
+          case 'down':
+            if (this.y + this.radius < canvas.height) this.y += this.speed;
+            break;
+          case 'left':
+            if (this.x - this.radius > 0) this.x -= this.speed;
+            break;
+          case 'right':
+            if (this.x + this.radius < canvas.width) this.x += this.speed;
+            break;
+        }
+      }
+    }
+
+    class Bullet {
+      constructor(x, y, dx, dy) {
+        this.x = x;
+        this.y = y;
+        this.radius = 5;
+        this.dx = dx;
+        this.dy = dy;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'yellow';
+        ctx.fill();
+        ctx.closePath();
+      }
+
+      update() {
+        this.x += this.dx;
+        this.y += this.dy;
+      }
+    }
+
+    const player = new Player();
+    const bullets = [];
+    const keys = {};
+
+    window.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+    });
+
+    window.addEventListener('click', (e) => {
+      const angle = Math.atan2(e.clientY - player.y, e.clientX - player.x);
+      const speed = 8;
+      const dx = Math.cos(angle) * speed;
+      const dy = Math.sin(angle) * speed;
+      bullets.push(new Bullet(player.x, player.y, dx, dy));
+    });
+
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Player Movement
+      if (keys['ArrowUp'] || keys['w']) player.move('up');
+      if (keys['ArrowDown'] || keys['s']) player.move('down');
+      if (keys['ArrowLeft'] || keys['a']) player.move('left');
+      if (keys['ArrowRight'] || keys['d']) player.move('right');
+
+      // Draw player
+      player.draw();
+
+      // Update and draw bullets
+      bullets.forEach((bullet, index) => {
+        bullet.update();
+        bullet.draw();
+
+        // Remove bullets that go off-screen
+        if (
+          bullet.x < 0 ||
+          bullet.x > canvas.width ||
+          bullet.y < 0 ||
+          bullet.y > canvas.height
+        ) {
+          bullets.splice(index, 1);
+        }
+      });
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>
